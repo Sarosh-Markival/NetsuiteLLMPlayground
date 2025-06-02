@@ -13,16 +13,16 @@ define(["N/url", "N/https", "N/runtime", "./constants"], /**
    * Makes a call to the LLM utility Suitelet
    * @private
    * @param {Object} payload - The request payload
-   * @returns {Object} - The response from the Suitelet
+   * @returns {Promise<Object>} - The response from the Suitelet
    */
-  function callLLMUtil(payload) {
+  async function callLLMUtil(payload) {
     // Get the deployment URL
     const suiteletUrl = url.resolveScript({
       scriptId: constants.Scripts.LLM_UTIL.SCRIPT_ID,
       deploymentId: constants.Scripts.LLM_UTIL.DEPLOY_ID,
     });
 
-    const response = https.post({
+    const response = await https.post.promise({
       url: suiteletUrl,
       body: JSON.stringify(payload),
       headers: {
@@ -43,8 +43,8 @@ define(["N/url", "N/https", "N/runtime", "./constants"], /**
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} - The generated text response
    */
-  function generateText(prompt, options = {}) {
-    return callLLMUtil({
+  async function generateText(prompt, options = {}) {
+    return await callLLMUtil({
       action: constants.Actions.GENERATE_TEXT,
       prompt,
       ...options,
@@ -57,8 +57,8 @@ define(["N/url", "N/https", "N/runtime", "./constants"], /**
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} - The generated text response with tokens
    */
-  function generateTextStreamed(prompt, options = {}) {
-    return callLLMUtil({
+  async function generateTextStreamed(prompt, options = {}) {
+    return await callLLMUtil({
       action: constants.Actions.GENERATE_TEXT_STREAMED,
       prompt,
       ...options,
@@ -72,8 +72,8 @@ define(["N/url", "N/https", "N/runtime", "./constants"], /**
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} - The generated text response
    */
-  function generateTextWithDocs(prompt, documents, options = {}) {
-    return callLLMUtil({
+  async function generateTextWithDocs(prompt, documents, options = {}) {
+    return await callLLMUtil({
       action: constants.Actions.GENERATE_TEXT_WITH_DOCS,
       prompt,
       documents,
@@ -88,8 +88,8 @@ define(["N/url", "N/https", "N/runtime", "./constants"], /**
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} - The chat response
    */
-  function generateChat(prompt, chatHistory = [], options = {}) {
-    return callLLMUtil({
+  async function generateChat(prompt, chatHistory = [], options = {}) {
+    return await callLLMUtil({
       action: constants.Actions.GENERATE_CHAT,
       prompt,
       chatHistory,
@@ -102,8 +102,8 @@ define(["N/url", "N/https", "N/runtime", "./constants"], /**
    * @param {Array<Object>} documents - The documents to create
    * @returns {Promise<Object>} - The created documents
    */
-  function createDocuments(documents) {
-    return callLLMUtil({
+  async function createDocuments(documents) {
+    return await callLLMUtil({
       action: constants.Actions.CREATE_DOCUMENTS,
       documents,
     });
@@ -115,8 +115,8 @@ define(["N/url", "N/https", "N/runtime", "./constants"], /**
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} - The embeddings response
    */
-  function generateEmbeddings(inputs, options = {}) {
-    return callLLMUtil({
+  async function generateEmbeddings(inputs, options = {}) {
+    return await callLLMUtil({
       action: constants.Actions.GENERATE_EMBEDDINGS,
       inputs,
       ...options,

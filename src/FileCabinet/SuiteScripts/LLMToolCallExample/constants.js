@@ -3,7 +3,7 @@
  * @NModuleScope Public
  * @description Constants module for LLM utility providing enums and constants
  */
-define([], function () {
+define(["./llm_tools"], function (llmTools) {
   /**
    * Text generation model families
    * @enum {string}
@@ -33,7 +33,6 @@ define([], function () {
   const ChatRole = {
     USER: "USER",
     CHATBOT: "CHATBOT",
-    SYSTEM: "SYSTEM",
   };
 
   /**
@@ -119,11 +118,55 @@ define([], function () {
       SCRIPT_ID: "customscript_mrk_llm_sa_util_sl",
       DEPLOY_ID: "customdeploy_mrk_llm_sa_util_sl",
     },
-    NEW_LLM_PLAYGROUND: {
-      SCRIPT_ID: "customscript_mrk_llm_sa_modern_sl",
-      DEPLOY_ID: "customdeploy_mrk_llm_sa_modern_sl",
-    },
   };
+
+  /**
+   * Default system prompt that enforces JSON output for tool calls
+   * @type {string}
+   */
+  const DEFAULT_SYSTEM_PROMPT = `You are an AI assistant integrated with NetSuite ERP.
+You have access to various NetSuite tools to help users with their tasks.
+Today's date is ${new Date().toISOString().split("T")[0]}.
+
+When you need to use a tool, format your response as a JSON object with these required fields:
+1. "isToolCall": true
+2. "toolName": the name of the tool to call
+3. "args": an object containing the tool's required arguments
+
+- Dont add json keyword just a valid JSON object
+Example tool call format:
+{
+  "isToolCall": true,
+  "toolName": "searchTransactions",
+  "args": {
+    "startDate": "2025-01-01",
+    "endDate": "2025-12-31",
+    "type": "invoice"
+  }
+}
+
+For date parameters, always use YYYY-MM-DD format.
+
+When interpreting tool responses:
+1. Focus on the business insights and actionable information
+2. Avoid technical details about the JSON structure or success flags
+3. Present findings in clear, concise language
+4. Highlight key metrics and trends
+5. Provide practical recommendations when relevant
+6. Use natural business language instead of technical terms
+`;
+
+  /**
+   * Default tool availability configuration
+   * @type {Object}
+   */
+  const DEFAULT_TOOLS_CONFIG = Object.keys(llmTools.TOOL_DEFINITIONS).reduce(
+    (config, tool) => {
+      config[tool] = true; // All tools enabled by default
+      return config;
+    },
+    {}
+  );
 
   return {
     ModelFamily: ModelFamily,
@@ -134,5 +177,7 @@ define([], function () {
     DefaultModelParameters: DefaultModelParameters,
     ParameterLimits: ParameterLimits,
     Scripts: Scripts,
+    DEFAULT_SYSTEM_PROMPT: DEFAULT_SYSTEM_PROMPT,
+    DEFAULT_TOOLS_CONFIG: DEFAULT_TOOLS_CONFIG,
   };
 });

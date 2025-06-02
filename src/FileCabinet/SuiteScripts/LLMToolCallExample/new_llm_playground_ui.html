@@ -22,6 +22,64 @@
         background-color: var(--bs-gray-100);
       }
 
+      .tab-container {
+        background: #f8f9fa;
+        padding: 1rem 1rem 0;
+      }
+
+      /* Custom Tab Styles */
+      #mainTabs {
+        display: flex;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        background: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+      }
+
+      #mainTabs .nav-item {
+        flex: 1;
+        max-width: 200px;
+      }
+
+      #mainTabs .nav-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 1rem;
+        color: #495057;
+        background: #f8f9fa;
+        border: none;
+        border-radius: 8px 8px 0 0;
+        margin: 0;
+        font-weight: 600;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      #mainTabs .nav-link:hover {
+        background: #e9ecef;
+        color: #0d6efd;
+      }
+
+      #mainTabs .nav-link.active {
+        color: #0d6efd;
+        background: white;
+        border: 2px solid #dee2e6;
+        border-bottom: 2px solid white;
+        margin-bottom: -2px;
+      }
+
+      .tab-content {
+        background: white;
+        border: 2px solid #dee2e6;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+
       .chat-container {
         height: calc(100vh - 120px);
         display: flex;
@@ -60,6 +118,13 @@
         color: var(--bs-danger);
       }
 
+      .message.system {
+        background-color: var(--bs-info-subtle);
+        border: 1px solid var(--bs-info);
+        color: var(--bs-info);
+        font-family: monospace;
+      }
+
       .message-icon {
         position: absolute;
         bottom: -0.5rem;
@@ -96,11 +161,65 @@
       }
 
       .model-settings {
-        width: 350px;
+        width: 400px;
+      }
+
+      .tools-container {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid var(--bs-gray-200);
+        border-radius: 4px;
+        padding: 1rem;
+        background: var(--bs-gray-100);
+      }
+
+      .tools-container .form-check {
+        padding: 0.5rem;
+        border-bottom: 1px solid var(--bs-gray-200);
+      }
+
+      .tools-container .form-check:last-child {
+        border-bottom: none;
+      }
+
+      .tools-container .form-check-label {
+        font-weight: 600;
+        color: var(--bs-gray-700);
+      }
+
+      .tools-container .text-muted {
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
       }
 
       .embed-container {
         height: calc(100vh - 120px);
+      }
+
+      .history-preview {
+        font-size: 0.75rem;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      /* Bootstrap utility classes */
+      .mb-4 {
+        margin-bottom: 1.5rem;
+      }
+      .mb-3 {
+        margin-bottom: 1rem;
+      }
+      .mb-2 {
+        margin-bottom: 0.5rem;
+      }
+      .mb-0 {
+        margin-bottom: 0;
+      }
+      .pb-2 {
+        padding-bottom: 0.5rem;
+      }
+      .me-2 {
+        margin-right: 0.5rem;
       }
 
       #embedInput {
@@ -110,32 +229,36 @@
   </head>
   <body>
     <!-- Tabs -->
-    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link active"
-          data-bs-toggle="tab"
-          data-bs-target="#chatTab"
-          type="button"
-          role="tab"
-          aria-selected="true"
-        >
-          <i class="fas fa-comments me-2"></i>Chat
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link"
-          data-bs-toggle="tab"
-          data-bs-target="#embeddingsTab"
-          type="button"
-          role="tab"
-          aria-selected="false"
-        >
-          <i class="fas fa-vector-square me-2"></i>Embeddings
-        </button>
-      </li>
-    </ul>
+    <div class="tab-container">
+      <ul id="mainTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link active"
+            data-bs-toggle="tab"
+            data-bs-target="#chatTab"
+            type="button"
+            role="tab"
+            aria-selected="true"
+          >
+            <i class="fas fa-comments me-2"></i>
+            <span>Chat</span>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            data-bs-toggle="tab"
+            data-bs-target="#embeddingsTab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+          >
+            <i class="fas fa-vector-square me-2"></i>
+            <span>Embeddings</span>
+          </button>
+        </li>
+      </ul>
+    </div>
 
     <!-- Tab Content -->
     <div class="tab-content">
@@ -175,8 +298,10 @@
                   data-bs-toggle="offcanvas"
                   data-bs-target="#modelSettings"
                   aria-controls="modelSettings"
+                  title="Open Model Settings"
                 >
-                  <i class="fas fa-cog"></i>
+                  <i class="fas fa-cog" aria-hidden="true"></i>
+                  <span class="visually-hidden">Open Model Settings</span>
                 </button>
               </div>
             </div>
@@ -260,6 +385,54 @@ Response will appear here...</pre
               aria-label="Model family selection"
             ></select>
           </div>
+
+          <!-- Chat History Settings -->
+          <div class="mb-4">
+            <h6 class="border-bottom pb-2">Chat History Settings</h6>
+            <div class="mb-3">
+              <label for="maxHistory" class="form-label"
+                >Maximum Chat History</label
+              >
+              <input
+                type="number"
+                class="form-control"
+                id="maxHistory"
+                min="1"
+                max="50"
+                value="10"
+              />
+              <div class="form-text">
+                Maximum number of past messages to include in context
+              </div>
+            </div>
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm w-100 mb-2"
+              id="viewHistoryBtn"
+              title="View current chat history context"
+              aria-label="View current chat history context"
+              aria-controls="historyCollapse"
+              aria-expanded="false"
+            >
+              <i class="fas fa-history me-2" aria-hidden="true"></i>View Current
+              Chat History
+            </button>
+            <div class="collapse" id="historyCollapse">
+              <div class="card card-body bg-light">
+                <small class="text-muted mb-2"
+                  >Current chat history context:</small
+                >
+                <pre
+                  class="mb-0 history-preview"
+                  id="historyPreview"
+                  aria-label="Chat history preview"
+                ></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- Model Parameters -->
+          <h6 class="border-bottom pb-2">Model Parameters</h6>
           <div class="mb-3">
             <label for="temperature" class="form-label">Temperature</label>
             <input
@@ -332,9 +505,17 @@ Response will appear here...</pre
               value="0"
             />
           </div>
+
+          <!-- Available Tools Section -->
+          <h6 class="border-bottom pb-2">Available Tools</h6>
+          <div class="mb-3 tools-container">
+            <!-- Tool checkboxes will be dynamically added here -->
+          </div>
+
           <button
             type="button"
             class="btn btn-primary w-100"
+            id="saveSettings"
             data-bs-dismiss="offcanvas"
           >
             <i class="fas fa-save me-2"></i>Save Settings
@@ -346,5 +527,25 @@ Response will appear here...</pre
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      // Initialize Bootstrap components when the page loads
+      window.addEventListener("load", function () {
+        // Enable all tooltips
+        var tooltipTriggerList = [].slice.call(
+          document.querySelectorAll('[data-bs-toggle="tooltip"]')
+        );
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+          new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+
+        // Enable all popovers
+        var popoverTriggerList = [].slice.call(
+          document.querySelectorAll('[data-bs-toggle="popover"]')
+        );
+        popoverTriggerList.forEach(function (popoverTriggerEl) {
+          new bootstrap.Popover(popoverTriggerEl);
+        });
+      });
+    </script>
   </body>
 </html>
