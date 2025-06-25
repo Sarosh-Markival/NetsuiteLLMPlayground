@@ -18,39 +18,49 @@ define([
 
   // Initialize system prompt in chat history
   function initializeSystemPrompt() {
-    // Preserve existing chat history if any
+    // Preserve existing history if any
     const existingHistory = fullChatHistory.slice(1); // everything except system prompt
 
+    // Get only enabled tools
+    const enabledTools = Object.keys(llmTools.TOOL_DEFINITIONS).filter(
+      (tool) => availableTools[tool]
+    );
+
+    console.log("Enabled tools:", enabledTools);
+
+    // Build tools documentation string only for enabled tools
+    const toolsDoc = enabledTools
+      .map((tool) => {
+        const toolDef = llmTools.TOOL_DEFINITIONS[tool];
+        const args = toolDef.args.properties;
+        const argDescriptions = Object.entries(args)
+          .map(([argName, argDef]) => {
+            const required = toolDef.args.required?.includes(argName);
+            const defaultValue = argDef.default
+              ? ` (default: ${argDef.default})`
+              : "";
+            return `    - ${argName} (${argDef.type})${
+              required ? " (Required)" : " (Optional)"
+            }${defaultValue}: ${argDef.description}`;
+          })
+          .join("\n");
+
+        return `\n- ${tool}: ${toolDef.description}\n  Arguments:\n${argDescriptions}`;
+      })
+      .join("\n");
+
+    // Create the new chat history with system prompt
     fullChatHistory = [
       {
-        role: constants.ChatRole.USER, // Changed from CHATBOT to SYSTEM
+        role: constants.ChatRole.USER, // Changed to USER role
         text:
-          constants.DEFAULT_SYSTEM_PROMPT +
-          "\n\nAvailable tools: " +
-          Object.keys(llmTools.TOOL_DEFINITIONS)
-            .filter((tool) => availableTools[tool])
-            .map((tool) => {
-              const toolDef = llmTools.TOOL_DEFINITIONS[tool];
-              const args = toolDef.args.properties;
-              const argDescriptions = Object.entries(args)
-                .map(([argName, argDef]) => {
-                  const required = toolDef.args.required?.includes(argName);
-                  const defaultValue = argDef.default
-                    ? ` (default: ${argDef.default})`
-                    : "";
-                  return `    - ${argName} (${argDef.type})${
-                    required ? " (Required)" : " (Optional)"
-                  }${defaultValue}: ${argDef.description}`;
-                })
-                .join("\n");
-
-              return `\n- ${tool}: ${toolDef.description}\n  Arguments:\n${argDescriptions}`;
-            })
-            .join("\n"),
+          constants.DEFAULT_SYSTEM_PROMPT + "\n\nAvailable tools: " + toolsDoc,
       },
-      ...existingHistory, // Add back the rest of the history
+      ...existingHistory,
     ];
+
     console.log("Initialized system prompt in chat history");
+    console.log("Enabled tools:", enabledTools);
     console.log("Full chat history:", fullChatHistory);
   }
 
@@ -61,19 +71,18 @@ define([
   function getCurrentChatHistory() {
     const maxHistory = parseInt(jQuery("#maxHistory").val());
 
-    // Ensure we have a valid chat history
+    // If there's no chat history at all, initialize it once
     if (!fullChatHistory.length) {
       initializeSystemPrompt();
+      return fullChatHistory; // Return the newly initialized history
     }
 
-    // Always get the first message (system prompt)
+    // Get the first message which should be the system prompt
     const systemPrompt = fullChatHistory[0];
 
-    // Get non-system messages
+    // Get non-system messages (all messages except system prompts)
     const nonSystemMessages = fullChatHistory.filter(
-      (msg, index) =>
-        // Skip the first message (system prompt) and any other system prompts
-        index > 0 && msg.text !== systemPrompt.text
+      (msg) => msg.role !== constants.ChatRole.USER
     );
 
     // Get the most recent messages within the limit
@@ -227,6 +236,18 @@ define([
         <small class="d-block text-muted">${tool.description}</small>
       </div>`);
       toolsContainer.append(checkbox);
+
+      // Add change handler to update availableTools when checkbox state changes
+      jQuery(`#tool_${toolName}`).on("change", function () {
+        availableTools[toolName] = this.checked;
+        // Update system prompt to reflect new tool availability
+        initializeSystemPrompt();
+      });
+    });
+
+    // Update availableTools based on initial checkbox states
+    Object.keys(llmTools.TOOL_DEFINITIONS).forEach((toolName) => {
+      availableTools[toolName] = jQuery(`#tool_${toolName}`).prop("checked");
     });
 
     // Initialize system prompt
@@ -282,6 +303,9 @@ define([
 
     // Prevent empty submissions
     if (!rawPrompt && !hasImage) return;
+
+    // Update system prompt with current tool availability before sending message
+    initializeSystemPrompt();
 
     // Add user message to chat history and UI before image gets cleared
     const userMessage = {
