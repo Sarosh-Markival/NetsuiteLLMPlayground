@@ -308,9 +308,6 @@ define(["N/llm", "N/log", "N/file", "./constants"], /**
     const llmChatHistory = (chatHistory || []).map((msg) => {
       // If the message has image data, append it to the text
       let messageText = msg.text;
-      if (msg.image?.data && msg.image?.name && msg.image?.type) {
-        messageText = `${messageText}\n[This message included an image: ${msg.image.name} (${msg.image.type})]`;
-      }
       return llm.createChatMessage({
         role: msg.role || llm.ChatRole.USER,
         text: messageText,

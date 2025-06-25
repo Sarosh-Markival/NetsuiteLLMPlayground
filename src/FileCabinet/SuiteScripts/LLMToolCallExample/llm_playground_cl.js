@@ -283,11 +283,26 @@ define([
     // Prevent empty submissions
     if (!rawPrompt && !hasImage) return;
 
-    /* -------------------------------------------------------------------------- */
-    /*                           1. Render user message                           */
-    /* -------------------------------------------------------------------------- */
+    // Add user message to chat history and UI before image gets cleared
+    const userMessage = {
+      role: constants.ChatRole.USER,
+      text: rawPrompt,
+    };
+    fullChatHistory.push(userMessage);
+
+    // Store image data for the API request
+    const imageData = hasImage
+      ? {
+          data: currentAttachedImage.data,
+          type: currentAttachedImage.type,
+          name: currentAttachedImage.name,
+        }
+      : null;
+
+    // Add user message to chat UI with image preview
     appendMessage(rawPrompt, "user", currentAttachedImage?.data);
 
+    // Build message text with image context
     const messageText = hasImage
       ? `${rawPrompt}\n[User shared an image: ${currentAttachedImage.name} (${currentAttachedImage.type})]`
       : rawPrompt;
@@ -296,7 +311,7 @@ define([
     /*                       2. Reset input & image preview                       */
     /* -------------------------------------------------------------------------- */
     resetInput($input);
-    resetImagePreview();
+    resetImagePreview(); // This clears currentAttachedImage, so we stored it above
 
     /* -------------------------------------------------------------------------- */
     /*                           3. Build model config                            */
@@ -313,7 +328,10 @@ define([
       const response = await llmApi.generateChat(
         messageText,
         getCurrentChatHistory(),
-        { ...modelSettings, image: hasImage ? currentAttachedImage : undefined }
+        {
+          ...modelSettings,
+          image: imageData, // Use stored image data instead of currentAttachedImage which is now cleared
+        }
       );
 
       if (!response.success) {
