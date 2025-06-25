@@ -60,12 +60,38 @@ define([
    */
   function getCurrentChatHistory() {
     const maxHistory = parseInt(jQuery("#maxHistory").val());
-    // Always keep the system prompt as the first message
+
+    // Ensure we have a valid chat history
+    if (!fullChatHistory.length) {
+      initializeSystemPrompt();
+    }
+
+    // Always get the first message (system prompt)
     const systemPrompt = fullChatHistory[0];
-    // Get the most recent messages within the limit, excluding the system prompt
-    const recentMessages = fullChatHistory.slice(-maxHistory + 1);
+
+    // Get non-system messages
+    const nonSystemMessages = fullChatHistory.filter(
+      (msg, index) =>
+        // Skip the first message (system prompt) and any other system prompts
+        index > 0 && msg.text !== systemPrompt.text
+    );
+
+    // Get the most recent messages within the limit
+    const recentMessages = nonSystemMessages.slice(
+      -Math.max(0, maxHistory - 1)
+    );
+
     // Combine system prompt with recent messages
-    return [systemPrompt, ...recentMessages];
+    const finalHistory = [systemPrompt, ...recentMessages];
+
+    console.log("Current chat history:", {
+      maxHistory,
+      totalMessages: finalHistory.length,
+      systemPrompt: finalHistory[0].text.substring(0, 50) + "...",
+      messageCount: recentMessages.length,
+    });
+
+    return finalHistory;
   }
 
   /**
@@ -250,108 +276,175 @@ define([
   async function handleSendMessage() {
     if (isRequestInProgress) return;
 
-    const prompt = jQuery("#chatInput").val().trim();
-    if (!prompt && !currentAttachedImage) return;
+    const $input = jQuery("#chatInput");
+    const rawPrompt = $input.val().trim();
+    const hasImage = Boolean(currentAttachedImage);
 
-    // Add user message to chat UI immediately for better UX
-    appendMessage(prompt, "user", currentAttachedImage?.data);
+    // Prevent empty submissions
+    if (!rawPrompt && !hasImage) return;
 
-    // Store image temporarily
-    const imageToSend = currentAttachedImage;
+    /* -------------------------------------------------------------------------- */
+    /*                           1. Render user message                           */
+    /* -------------------------------------------------------------------------- */
+    appendMessage(rawPrompt, "user", currentAttachedImage?.data);
 
-    // Prepare the message text with image context if present
-    const messageText = currentAttachedImage
-      ? `${prompt}\n[User shared an image: ${currentAttachedImage.name} (${currentAttachedImage.type})]`
-      : prompt;
+    const messageText = hasImage
+      ? `${rawPrompt}\n[User shared an image: ${currentAttachedImage.name} (${currentAttachedImage.type})]`
+      : rawPrompt;
 
-    // Clear input and image
-    jQuery("#chatInput").val("").trigger("input");
-    if (currentAttachedImage) {
-      jQuery("#imagePreviewArea").addClass("d-none");
-      jQuery("#attachedImagePreview").attr("src", "");
-      jQuery("#imageInput").val("");
-      currentAttachedImage = null;
-    }
+    /* -------------------------------------------------------------------------- */
+    /*                       2. Reset input & image preview                       */
+    /* -------------------------------------------------------------------------- */
+    resetInput($input);
+    resetImagePreview();
 
-    // Get model settings and check if streaming is enabled
-    const isStreaming = jQuery("#streamOutput").val() === "stream";
-    const modelSettings = {
-      modelFamily: !!imageToSend
-        ? constants.ModelFamily.META_LLAMA_VISION
-        : jQuery("#modelFamily").val(),
-      isStreaming: isStreaming,
-      modelParameters: {
-        temperature: parseFloat(jQuery("#temperature").val()),
-        maxTokens: parseInt(jQuery("#maxTokens").val()),
-        topK: parseInt(jQuery("#topK").val()),
-        topP: parseFloat(jQuery("#topP").val()),
-        frequencyPenalty: parseFloat(jQuery("#frequencyPenalty").val()),
-        presencePenalty: parseFloat(jQuery("#presencePenalty").val()),
-      },
-    };
+    /* -------------------------------------------------------------------------- */
+    /*                           3. Build model config                            */
+    /* -------------------------------------------------------------------------- */
+    const modelSettings = buildModelSettings(hasImage);
 
-    // Start loading state
+    /* -------------------------------------------------------------------------- */
+    /*                          4. Send request to LLM                            */
+    /* -------------------------------------------------------------------------- */
     isRequestInProgress = true;
     updateUIState();
 
     try {
-      // Send the message to the server
       const response = await llmApi.generateChat(
-        prompt,
+        messageText,
         getCurrentChatHistory(),
-        {
-          ...modelSettings,
-          image: imageToSend,
-        }
+        { ...modelSettings, image: hasImage ? currentAttachedImage : undefined }
       );
 
-      if (response.success) {
-        if (isStreaming && response.tokens) {
-          // Create a chat bubble for streaming
-          const chatBubble = jQuery("<div>").addClass("message bot");
-          const textElement = jQuery("<div>").addClass("message-text");
-          const iconElement = jQuery("<div>")
-            .addClass("message-icon")
-            .append(jQuery("<i>").addClass("fas fa-robot"));
-
-          chatBubble.append(textElement);
-          if (response.remainingUsage !== undefined) {
-            const usageElement = jQuery("<div>")
-              .addClass("usage-info")
-              .html(
-                `<small class="text-muted"><i class="fas fa-bolt"></i> Remaining usage: ${response.remainingUsage}</small>`
-              );
-            chatBubble.append(usageElement);
-          }
-          chatBubble.append(iconElement);
-          jQuery("#chatMessages").append(chatBubble);
-
-          // Stream the tokens
-          let streamedText = "";
-          for (const token of response.tokens) {
-            streamedText += token;
-            textElement.text(streamedText);
-            chatBubble[0].scrollIntoView({ behavior: "smooth" });
-            // Small delay for smooth streaming
-            await new Promise((resolve) => setTimeout(resolve, 30));
-          }
-        } else {
-          appendMessage(response.text, "bot", null, response.remainingUsage);
-        }
-
-        // Update chat history with server's version
-        if (response.chatHistory) {
-          fullChatHistory = response.chatHistory;
-        }
-      } else {
-        appendMessage(response.message || "Unknown error occurred", "error");
+      if (!response.success) {
+        throw new Error(response.message || "Unknown error");
       }
-    } catch (error) {
-      console.error("Chat Error:", error);
-      appendMessage(error.message || "An error occurred", "error");
+
+      await handleLLMResponse(response, modelSettings);
+    } catch (err) {
+      console.error("Chat Error:", err);
+      appendMessage(err.message || "An error occurred", "error");
     } finally {
       isRequestInProgress = false;
       updateUIState();
+    }
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                                  Helpers                                   */
+  /* -------------------------------------------------------------------------- */
+
+  function resetInput($input) {
+    $input.val("").trigger("input");
+  }
+
+  function resetImagePreview() {
+    if (!currentAttachedImage) return;
+    jQuery("#imagePreviewArea").addClass("d-none");
+    jQuery("#attachedImagePreview").attr("src", "");
+    jQuery("#imageInput").val("");
+    currentAttachedImage = null;
+  }
+
+  function buildModelSettings(hasImage) {
+    const isStreaming = jQuery("#streamOutput").val() === "stream";
+    return {
+      modelFamily: hasImage
+        ? constants.ModelFamily.META_LLAMA_VISION
+        : jQuery("#modelFamily").val(),
+      isStreaming,
+      modelParameters: {
+        temperature: +jQuery("#temperature").val(),
+        maxTokens: +jQuery("#maxTokens").val(),
+        topK: +jQuery("#topK").val(),
+        topP: +jQuery("#topP").val(),
+        frequencyPenalty: +jQuery("#frequencyPenalty").val(),
+        presencePenalty: +jQuery("#presencePenalty").val(),
+      },
+    };
+  }
+
+  async function handleLLMResponse(response, modelSettings) {
+    let botText = response.text;
+    fullChatHistory = response.chatHistory || fullChatHistory;
+
+    // Detect tool call
+    const parsed = safeJSONParse(botText);
+    if (parsed?.isToolCall) {
+      await handleToolCall(parsed, modelSettings);
+      return;
+    }
+
+    if (modelSettings.isStreaming && response.tokens) {
+      await streamTokens(response.tokens, response.remainingUsage);
+    } else {
+      appendMessage(botText, "bot", null, response.remainingUsage);
+    }
+  }
+
+  async function handleToolCall(toolCall, modelSettings) {
+    appendMessage("Calling NetSuite tool...", "system", null, null, {
+      toolName: toolCall.toolName,
+      args: toolCall.args,
+    });
+
+    const toolResult = await simulateToolCall(toolCall);
+
+    appendMessage("Tool execution completed. Processing results...", "system");
+
+    const followUp = await llmApi.generateChat(
+      `Tool ${toolCall.toolName} returned: ${JSON.stringify(
+        toolResult
+      )}. Please interpret these results.`,
+      getCurrentChatHistory(),
+      modelSettings
+    );
+
+    if (!followUp.success) {
+      throw new Error("Failed to interpret tool results");
+    }
+
+    fullChatHistory = followUp.chatHistory || fullChatHistory;
+    appendMessage(followUp.text, "bot", null, followUp.remainingUsage);
+  }
+
+  function safeJSONParse(text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  }
+
+  async function streamTokens(tokens, remainingUsage) {
+    const chatBubble = jQuery("<div>").addClass("message bot");
+    const textEl = jQuery("<div>").addClass("message-text");
+    chatBubble
+      .append(textEl)
+      .append(
+        jQuery("<div>")
+          .addClass("message-icon")
+          .append(jQuery("<i>").addClass("fas fa-robot"))
+      );
+
+    if (remainingUsage !== undefined) {
+      chatBubble.append(
+        jQuery("<div>")
+          .addClass("usage-info")
+          .html(
+            `<small class="text-muted"><i class="fas fa-bolt"></i> Remaining usage: ${remainingUsage}</small>`
+          )
+      );
+    }
+
+    jQuery("#chatMessages").append(chatBubble);
+
+    let streamed = "";
+    for (const token of tokens) {
+      streamed += token;
+      textEl.text(streamed);
+      chatBubble[0].scrollIntoView({ behavior: "smooth" });
+      await new Promise((r) => setTimeout(r, 30)); // smooth streaming
     }
   }
 
@@ -403,7 +496,8 @@ define([
     text,
     type = "bot",
     imageUrl = null,
-    usageInfo = null
+    usageInfo = null,
+    toolInfo = null
   ) {
     const messageDiv = jQuery("<div>").addClass(`message ${type}`);
 
@@ -419,6 +513,39 @@ define([
           maxHeight: "200px",
         });
       messageDiv.append(imgElement);
+    }
+
+    // Add tool call info if available
+    if (toolInfo) {
+      const toolCallDiv = jQuery("<div>").addClass("tool-call-info mb-2").css({
+        padding: "8px",
+        backgroundColor: "#f8f9fa",
+        borderRadius: "4px",
+        borderLeft: "3px solid #0d6efd",
+      });
+
+      const toolHeader = jQuery("<div>")
+        .addClass("d-flex align-items-center mb-1")
+        .append(
+          jQuery("<i>").addClass("fas fa-tools me-2").css("color", "#0d6efd"),
+          jQuery("<strong>")
+            .text(`Running Tool: ${toolInfo.toolName}`)
+            .css("color", "#0d6efd")
+        );
+
+      const toolArgs = jQuery("<pre>")
+        .addClass("tool-args mb-0 mt-1")
+        .css({
+          fontSize: "0.85em",
+          backgroundColor: "#ffffff",
+          padding: "4px",
+          border: "1px solid #dee2e6",
+          borderRadius: "3px",
+        })
+        .text(JSON.stringify(toolInfo.args, null, 2));
+
+      toolCallDiv.append(toolHeader, toolArgs);
+      messageDiv.append(toolCallDiv);
     }
 
     const textElement = jQuery("<div>").addClass("message-text").text(text);
@@ -521,6 +648,111 @@ define([
       imageInput.value = "";
       currentAttachedImage = null;
     });
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                              Tool Call Simulation                              */
+  /* -------------------------------------------------------------------------- */
+
+  /**
+   * Simulates execution of a tool call with mock data
+   * @param {Object} toolCall - The tool call configuration
+   * @param {string} toolCall.toolName - Name of the tool to execute
+   * @param {Object} toolCall.args - Arguments for the tool
+   * @returns {Promise<Object>} Simulated result data
+   */
+  async function simulateToolCall(toolCall) {
+    // Validate the tool exists in definitions
+    const toolDef = llmTools.TOOL_DEFINITIONS[toolCall.toolName];
+    if (!toolDef) {
+      throw new Error(`Unknown tool: ${toolCall.toolName}`);
+    }
+
+    // Add a small delay to simulate processing
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Get current date for mock data
+    const today = new Date();
+    const mockDate = today.toISOString().split("T")[0];
+
+    // Return mock results based on the tool name
+    switch (toolCall.toolName) {
+      case "searchTransactions":
+        return {
+          transactions: [
+            {
+              id: "TRANS123",
+              date: mockDate,
+              amount: 1500.0,
+              type: toolCall.args.type || "invoice",
+              status: "completed",
+            },
+            {
+              id: "TRANS124",
+              date: mockDate,
+              amount: 2300.5,
+              type: toolCall.args.type || "invoice",
+              status: "pending",
+            },
+          ],
+          totalCount: 2,
+          totalAmount: 3800.5,
+        };
+
+      case "analyzeCustomer":
+        return {
+          customerDetails: {
+            id: toolCall.args.customerId,
+            totalTransactions: 25,
+            totalSpent: 25000.0,
+            lastPurchaseDate: mockDate,
+            segments: ["frequent", "high-value"],
+            riskScore: "low",
+            lifetimeValue: 25000.0,
+          },
+        };
+
+      case "getInventoryLevels":
+        return {
+          items: [
+            {
+              itemId: "ITEM001",
+              name: "Sample Product 1",
+              quantityAvailable: 150,
+              reorderPoint: 50,
+              lastRestockDate: mockDate,
+            },
+            {
+              itemId: "ITEM002",
+              name: "Sample Product 2",
+              quantityAvailable: 75,
+              reorderPoint: 25,
+              lastRestockDate: mockDate,
+            },
+          ],
+          warehouseId: toolCall.args.warehouseId || "WH1",
+          totalItems: 2,
+        };
+
+      case "generateReport":
+        return {
+          reportId: "REP" + Date.now(),
+          type: toolCall.args.reportType,
+          status: "completed",
+          generatedDate: mockDate,
+          url: "https://example.com/reports/mock-report.pdf",
+        };
+
+      default:
+        // For unknown tools, return a generic response with the provided args
+        return {
+          status: "simulated",
+          toolName: toolCall.toolName,
+          timestamp: mockDate,
+          args: toolCall.args,
+          message: `Simulated response for tool: ${toolCall.toolName}`,
+        };
+    }
   }
 
   return {
