@@ -112,6 +112,18 @@
         border: 1px solid var(--bs-gray-200);
       }
 
+      .usage-info {
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--bs-gray-200);
+        font-size: 0.875rem;
+      }
+
+      .usage-info i {
+        color: var(--bs-warning);
+        margin-right: 0.25rem;
+      }
+
       .message.error {
         background-color: var(--bs-danger-subtle);
         border: 1px solid var(--bs-danger);
@@ -225,6 +237,30 @@
       #embedInput {
         height: 200px;
       }
+
+      .message-image {
+        display: block;
+        object-fit: contain;
+        border: 1px solid #dee2e6;
+      }
+      .attached-image-preview {
+        max-width: 200px;
+        max-height: 200px;
+        object-fit: contain;
+        border: 1px solid #dee2e6;
+      }
+      .remove-image-btn {
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        margin: -8px;
+      }
+      .d-none {
+        display: none !important;
+      }
+      #cancelBtn {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -266,6 +302,24 @@
       <div class="tab-pane fade show active" id="chatTab" role="tabpanel">
         <div class="chat-container">
           <div class="chat-messages bg-white shadow-sm" id="chatMessages"></div>
+          <div id="imagePreviewArea" class="mb-2 d-none">
+            <div class="position-relative d-inline-block">
+              <img
+                id="attachedImagePreview"
+                class="rounded attached-image-preview"
+                alt="Attached image preview"
+                title="Attached image"
+              />
+              <button
+                class="btn btn-sm btn-danger position-absolute top-0 end-0 rounded-circle remove-image-btn"
+                id="removeImage"
+                title="Remove attached image"
+                aria-label="Remove attached image"
+              >
+                <i class="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
           <div class="input-container">
             <div class="d-flex gap-2">
               <div class="flex-grow-1">
@@ -279,11 +333,35 @@
               </div>
               <div class="d-flex gap-2">
                 <button
+                  class="btn btn-outline-secondary"
+                  id="cancelBtn"
+                  title="Cancel"
+                  aria-label="Cancel"
+                >
+                  <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+                <button
+                  class="btn btn-outline-secondary"
+                  id="attachImageBtn"
+                  title="Attach image"
+                  aria-label="Attach image"
+                >
+                  <i class="fas fa-image" aria-hidden="true"></i>
+                </button>
+                <input
+                  type="file"
+                  id="imageInput"
+                  class="d-none"
+                  accept="image/*"
+                  aria-label="Image file input"
+                />
+                <button
                   class="btn btn-primary"
-                  id="sendButton"
+                  id="sendBtn"
+                  title="Send message"
                   aria-label="Send message"
                 >
-                  <i class="fas fa-paper-plane"></i>
+                  <i class="fas fa-paper-plane" aria-hidden="true"></i>
                 </button>
                 <button
                   class="btn btn-outline-secondary"
@@ -384,6 +462,22 @@ Response will appear here...</pre
               id="modelFamily"
               aria-label="Model family selection"
             ></select>
+          </div>
+
+          <!-- Output Type Settings -->
+          <div class="mb-3">
+            <label for="streamOutput" class="form-label">Output Type</label>
+            <select
+              class="form-select"
+              id="streamOutput"
+              aria-label="Output type selection"
+            >
+              <option value="normal">Normal</option>
+              <option value="stream">Stream</option>
+            </select>
+            <div class="form-text">
+              Choose between normal response or token-by-token streaming
+            </div>
           </div>
 
           <!-- Chat History Settings -->
@@ -527,25 +621,5 @@ Response will appear here...</pre
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-      // Initialize Bootstrap components when the page loads
-      window.addEventListener("load", function () {
-        // Enable all tooltips
-        var tooltipTriggerList = [].slice.call(
-          document.querySelectorAll('[data-bs-toggle="tooltip"]')
-        );
-        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
-          new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-
-        // Enable all popovers
-        var popoverTriggerList = [].slice.call(
-          document.querySelectorAll('[data-bs-toggle="popover"]')
-        );
-        popoverTriggerList.forEach(function (popoverTriggerEl) {
-          new bootstrap.Popover(popoverTriggerEl);
-        });
-      });
-    </script>
   </body>
 </html>

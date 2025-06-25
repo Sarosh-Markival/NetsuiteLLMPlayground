@@ -80,7 +80,7 @@ define(["./llm_tools"], function (llmTools) {
     temperature: {
       min: 0,
       max: 1,
-      default: 0.5,
+      default: 0.0,
     },
     maxTokens: {
       min: 1,

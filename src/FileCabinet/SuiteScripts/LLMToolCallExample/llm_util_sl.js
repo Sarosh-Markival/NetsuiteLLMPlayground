@@ -3,12 +3,12 @@
  * @NScriptType Suitelet
  * @description A comprehensive API wrapper for N/llm functionality with streaming and embedding support
  */
-define(["N/llm", "N/log", "./constants"]
-/**
+define(["N/llm", "N/log", "N/file", "./constants"], /**
  * @param {import('N/llm')} llm
  * @param {import('N/log')} log
+ * @param {import('N/file')} file
  * @param {Object} constants
- */, (llm, log, constants) => {
+ */ (llm, log, file, constants) => {
   /**
    * Default model parameters
    */
@@ -21,10 +21,10 @@ define(["N/llm", "N/log", "./constants"]
    */
   function handleGenerateText(params) {
     log.debug({
-      title: 'LLM Utility - Generate Text',
+      title: "LLM Utility - Generate Text",
       details: {
-        params: params
-      }
+        params: params,
+      },
     });
 
     const { prompt, modelFamily, modelParameters, preamble, ociConfig } =
@@ -39,19 +39,19 @@ define(["N/llm", "N/log", "./constants"]
       preamble,
       modelFamily: modelFamily || constants.ModelFamily.COHERE_COMMAND_R,
       modelParameters: { ...DEFAULT_MODEL_PARAMS, ...modelParameters },
-      ociConfig
+      ociConfig,
     };
 
     log.debug({
-      title: 'LLM Utility - Calling generateText',
-      details: requestParams
+      title: "LLM Utility - Calling generateText",
+      details: requestParams,
     });
 
     const response = llm.generateText(requestParams);
 
     log.debug({
-      title: 'LLM Utility - Generate Text Response',
-      details: response
+      title: "LLM Utility - Generate Text Response",
+      details: response,
     });
 
     return {
@@ -68,10 +68,10 @@ define(["N/llm", "N/log", "./constants"]
    */
   function handleGenerateTextStreamed(params) {
     log.debug({
-      title: 'LLM Utility - Generate Text Streamed',
+      title: "LLM Utility - Generate Text Streamed",
       details: {
-        params: params
-      }
+        params: params,
+      },
     });
 
     const {
@@ -115,8 +115,8 @@ define(["N/llm", "N/log", "./constants"]
     };
 
     log.debug({
-      title: 'LLM Utility - Calling generateTextStreamed',
-      details: requestParams
+      title: "LLM Utility - Calling generateTextStreamed",
+      details: requestParams,
     });
 
     const response = llm.generateTextStreamed(requestParams);
@@ -129,15 +129,15 @@ define(["N/llm", "N/log", "./constants"]
     });
 
     log.debug({
-      title: 'LLM Utility - Generate Text Streamed Response',
+      title: "LLM Utility - Generate Text Streamed Response",
       details: {
         text: response.text,
         model: response.model,
         tokenCount: tokens.length,
         citations: response.citations,
         documents: response.documents,
-        chatHistory: response.chatHistory
-      }
+        chatHistory: response.chatHistory,
+      },
     });
 
     return {
@@ -158,10 +158,10 @@ define(["N/llm", "N/log", "./constants"]
    */
   function handleGenerateTextWithDocs(params) {
     log.debug({
-      title: 'LLM Utility - Generate Text with Docs',
+      title: "LLM Utility - Generate Text with Docs",
       details: {
-        params: params
-      }
+        params: params,
+      },
     });
 
     const {
@@ -199,20 +199,20 @@ define(["N/llm", "N/log", "./constants"]
     };
 
     log.debug({
-      title: 'LLM Utility - Calling generateText with Documents',
-      details: requestParams
+      title: "LLM Utility - Calling generateText with Documents",
+      details: requestParams,
     });
 
     const response = llm.generateText(requestParams);
 
     log.debug({
-      title: 'LLM Utility - Generate Text with Docs Response',
+      title: "LLM Utility - Generate Text with Docs Response",
       details: {
         text: response.text,
         model: response.model,
         citations: response.citations,
-        documents: response.documents
-      }
+        documents: response.documents,
+      },
     });
 
     return {
@@ -225,18 +225,70 @@ define(["N/llm", "N/log", "./constants"]
   }
 
   /**
-   * Handles chat-based text generation
+   * Convert base64 image data to file.File object
+   * @param {string} base64Data Base64 image data
+   * @param {string} fileName Original file name
+   * @param {string} fileType File MIME type
+   * @returns {Object} file.File object
+   */
+  function createImageFile(base64Data, fileName, fileType) {
+    try {
+      // Remove data URL prefix if present
+      const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, "");
+
+      // Create temp file from base64
+      // Map MIME types to NetSuite file types
+      let netsuiteFT = file.Type.PJPGIMAGE; // Default to JPEG
+      if (fileType.startsWith("image/")) {
+        const mimeSubtype = fileType.split("/")[1].toLowerCase();
+        switch (mimeSubtype) {
+          case "jpeg":
+          case "jpg":
+            netsuiteFT = file.Type.JPGIMAGE;
+            break;
+          case "png":
+            netsuiteFT = file.Type.PNGIMAGE;
+            break;
+          case "gif":
+            netsuiteFT = file.Type.GIFIMAGE;
+            break;
+          case "bmp":
+            netsuiteFT = file.Type.BMPIMAGE;
+            break;
+          case "tiff":
+          case "tif":
+            netsuiteFT = file.Type.TIFFIMAGE;
+            break;
+          case "svg+xml":
+            netsuiteFT = file.Type.SVG;
+            break;
+          default:
+            netsuiteFT = file.Type.PJPGIMAGE; // Fallback to JPEG
+        }
+      }
+
+      return file.create({
+        name: fileName,
+        fileType: netsuiteFT,
+        contents: base64Content,
+        encoding: file.Encoding.BASE_64,
+        folder: -15, // Temporary folder
+      });
+    } catch (error) {
+      log.error({
+        title: "Error creating image file",
+        details: error,
+      });
+      throw new Error("Failed to process image: " + error.message);
+    }
+  }
+
+  /**
+   * Handles chat-based text generation with support for both streaming and normal responses
    * @param {object} params Request parameters
-   * @returns {object} Response with chat history
+   * @returns {object} Response with chat history and optional tokens for streaming
    */
   function handleGenerateChat(params) {
-    log.debug({
-      title: 'LLM Utility - Generate Chat',
-      details: {
-        params: params
-      }
-    });
-
     const {
       prompt,
       chatHistory,
@@ -244,6 +296,8 @@ define(["N/llm", "N/log", "./constants"]
       modelParameters,
       preamble,
       ociConfig,
+      image,
+      isStreaming,
     } = params;
 
     if (!prompt?.trim()) {
@@ -251,23 +305,34 @@ define(["N/llm", "N/log", "./constants"]
     }
 
     // Convert chat history to ChatMessage objects
-    const llmChatHistory = (chatHistory || []).map((msg) =>
-      llm.createChatMessage({
+    const llmChatHistory = (chatHistory || []).map((msg) => {
+      // If the message has image data, append it to the text
+      let messageText = msg.text;
+      if (msg.image?.data && msg.image?.name && msg.image?.type) {
+        messageText = `${messageText}\n[This message included an image: ${msg.image.name} (${msg.image.type})]`;
+      }
+      return llm.createChatMessage({
         role: msg.role || llm.ChatRole.USER,
-        text: msg.text,
-      })
-    );
+        text: messageText,
+      });
+    });
 
-    // Add current prompt as user message
+    // Add current prompt and image context if present
+    let finalPrompt = prompt;
+    if (image?.data && image?.name && image?.type) {
+      finalPrompt = `${prompt}\n[Current message includes an image: ${image.name} (${image.type})]`;
+    }
+
+    // Add the current message to chat history
     llmChatHistory.push(
       llm.createChatMessage({
         role: llm.ChatRole.USER,
-        text: prompt,
+        text: finalPrompt,
       })
     );
 
     const requestParams = {
-      prompt,
+      prompt: finalPrompt, // Use the prompt with image context
       preamble,
       chatHistory: llmChatHistory,
       modelFamily: modelFamily || constants.ModelFamily.COHERE_COMMAND_R,
@@ -275,27 +340,61 @@ define(["N/llm", "N/log", "./constants"]
       ociConfig,
     };
 
-    log.debug({
-      title: 'LLM Utility - Calling generateText with Chat History',
-      details: requestParams
-    });
-
-    const response = llm.generateText(requestParams);
-
-    log.debug({
-      title: 'LLM Utility - Generate Chat Response',
-      details: {
-        text: response.text,
-        model: response.model,
-        chatHistory: response.chatHistory
+    // Add image to request if provided and using vision model
+    if (image?.data && image?.name && image?.type) {
+      if (modelFamily === constants.ModelFamily.META_LLAMA_VISION) {
+        requestParams.image = createImageFile(
+          image.data,
+          image.name,
+          image.type
+        );
       }
+    }
+
+    log.debug({
+      title: "LLM Utility - Generate Chat Request",
+      details: {
+        modelFamily: requestParams.modelFamily,
+        isVisionModel:
+          requestParams.modelFamily === constants.ModelFamily.META_LLAMA_VISION,
+        isStreaming: isStreaming,
+      },
     });
 
+    // Use the appropriate generation method based on isStreaming flag
+    let generatedText, modelUsed, tokens;
+    if (isStreaming) {
+      const streamResponse = llm.generateTextStreamed(requestParams);
+      tokens = [];
+      const iter = streamResponse.iterator();
+      iter.each(function (token) {
+        tokens.push(token.value);
+        return true;
+      });
+      generatedText = streamResponse.text;
+      modelUsed = streamResponse.model;
+    } else {
+      const response = llm.generateText(requestParams);
+      generatedText = response.text;
+      modelUsed = response.model;
+    }
+
+    // Add assistant's response to chat history
+    llmChatHistory.push(
+      llm.createChatMessage({
+        role: llm.ChatRole.CHATBOT,
+        text: generatedText,
+      })
+    );
+
+    // Return response with updated chat history and optional tokens for streaming
     return {
       success: true,
-      text: response.text,
-      model: response.model,
-      chatHistory: response.chatHistory || [],
+      text: generatedText,
+      model: modelUsed,
+      ...(isStreaming && { tokens }),
+      chatHistory: llmChatHistory,
+      remainingUsage: llm.getRemainingFreeUsage(),
     };
   }
 
@@ -331,10 +430,10 @@ define(["N/llm", "N/log", "./constants"]
    */
   function handleGenerateEmbeddings(params) {
     log.debug({
-      title: 'LLM Utility - Generate Embeddings',
+      title: "LLM Utility - Generate Embeddings",
       details: {
-        params: params
-      }
+        params: params,
+      },
     });
 
     const { inputs, embedModelFamily, ociConfig, timeout, truncate } = params;
@@ -354,19 +453,19 @@ define(["N/llm", "N/log", "./constants"]
     };
 
     log.debug({
-      title: 'LLM Utility - Calling embed',
-      details: requestParams
+      title: "LLM Utility - Calling embed",
+      details: requestParams,
     });
 
     const response = llm.embed(requestParams);
 
     log.debug({
-      title: 'LLM Utility - Generate Embeddings Response',
+      title: "LLM Utility - Generate Embeddings Response",
       details: {
         embeddingsCount: response.embeddings?.length,
         inputsCount: response.inputs?.length,
-        model: response.model
-      }
+        model: response.model,
+      },
     });
 
     return {
@@ -384,13 +483,13 @@ define(["N/llm", "N/log", "./constants"]
   const onRequest = (context) => {
     try {
       log.debug({
-        title: 'LLM Utility - Request Received',
+        title: "LLM Utility - Request Received",
         details: {
           method: context.request.method,
           headers: context.request.headers,
           parameters: context.request.parameters,
-          body: context.request.body
-        }
+          body: context.request.body,
+        },
       });
 
       if (context.request.method !== "POST") {
@@ -406,11 +505,11 @@ define(["N/llm", "N/log", "./constants"]
       const { action, ...params } = requestBody;
 
       log.debug({
-        title: 'LLM Utility - Processing Request',
+        title: "LLM Utility - Processing Request",
         details: {
           action: action,
-          parameters: params
-        }
+          parameters: params,
+        },
       });
 
       let response;

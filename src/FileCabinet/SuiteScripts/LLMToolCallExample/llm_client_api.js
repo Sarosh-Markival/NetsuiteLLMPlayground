@@ -22,6 +22,12 @@ define(["N/url", "N/https", "N/runtime", "./constants"], /**
       deploymentId: constants.Scripts.LLM_UTIL.DEPLOY_ID,
     });
 
+    // Debug log
+    console.log(
+      "Sending payload to LLM Util:",
+      JSON.stringify(payload, null, 2)
+    );
+
     const response = await https.post.promise({
       url: suiteletUrl,
       body: JSON.stringify(payload),
@@ -83,16 +89,25 @@ define(["N/url", "N/https", "N/runtime", "./constants"], /**
 
   /**
    * Generate chat response
-   * @param {string} prompt - The current message
-   * @param {Array<Object>} chatHistory - Previous chat messages
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} - The chat response
+   * @param {string} prompt User's prompt
+   * @param {Array} chatHistory Previous chat history
+   * @param {Object} options Additional options including model parameters
+   * @returns {Promise<Object>} Response from the LLM API
    */
   async function generateChat(prompt, chatHistory = [], options = {}) {
+    const validChatHistory = chatHistory.filter(
+      (msg) => msg && msg.text && msg.role
+    );
+
+    console.log(
+      "Generating chat with history:",
+      JSON.stringify(validChatHistory, null, 2)
+    );
+
     return await callLLMUtil({
       action: constants.Actions.GENERATE_CHAT,
       prompt,
-      chatHistory,
+      chatHistory: validChatHistory,
       ...options,
     });
   }
